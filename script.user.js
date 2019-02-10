@@ -14,6 +14,16 @@ const {
     decode
 } = msgpack;
 
+unsafeWindow.msgpack = msgpack;
+
+var _WebSocket = WebSocket;
+
+unsafeWindow.WebSocket = function(url) {
+    const ws = new _WebSocket(url);
+    unsafeWindow.webSocket = ws;
+    return ws;
+}
+
 class Server {
     constructor() {
         this.queue = new Set();
@@ -137,19 +147,37 @@ unsafeWindow.HackDetect = class {
     static init() {
         this.api = new KrunkerSocial();
         this.players = new Set();
+		this.hackers = new Set();
 
-
+		this.myStats = null;
+		this.myName = null;
         setInterval(this.getUsers.bind(this), 1000);
     }
 
     static getUsers() {
+		this.hackers.forEach(hacker => {
+            Array.from($("#chatList").children()).forEach(child => {
+                const text = $(child).text()
+                if (text.indexOf(hacker) >=0 && text.indexOf("HACKER") < 0) {
+                    child.innerHTML = child.innerHTML.replace(hacker, hacker + '<span style="color:#64b5f6">[HACKER]</span> ')
+                }
+            })
+        })
+
         const players = new Set();
         Array.from($("#leaderContainer").children()).forEach(child => {
             if ($(child).find(".leaderName")[0]) {
                 let name = $(child).find(".leaderName")[0].innerHTML;
                 if (name.indexOf("<span") >= 0) name = name.split("<span")[0];
                 if (name.indexOf("Guest") < 0 && name !== "check_circle") players.add(name);
-            }
+            } else if ($(child).find(".leaderNameM")[0]) {
+				let name = $(child).find(".leaderNameM")[0].innerHTML;
+                if (name.indexOf("<span") >= 0) name = name.split("<span")[0];
+                if (name.indexOf("Guest") < 0 && name !== "check_circle") {
+					this.myName = name;
+					players.add(name);
+				}
+			}
 
         })
         let difference = new Set([...players].filter(x => !this.players.has(x)));
@@ -160,18 +188,29 @@ unsafeWindow.HackDetect = class {
     }
 
     static checkPlayer(player) {
-        console.log(player)
         const user = this.api.getUser(player);
 
     }
 
     static handlePlayer(stats) {
-        console.log(stats)
+        if (stats.player_name == this.myName) {
+			this.myStats = stats;
+			this.players.forEach(player => {
+				this.checks(player);
+			})
+		}
         if (stats.player_hack) {
-
             $("#chatList").append(`<div class="chatItem"><span class="chatMsg"><span style="color:#64b5f6">${stats.player_name}</span> is a flagged <span style="color:#eb5656">HACKER</span></span></div><br>`)
-        }
+			this.hackers.add(stats.player_name);
+            if (stats.player_name !== this.myName) webSocket.send(encode(["c", ["/kick " + stats.player_name]]));
+		}
+		if (this.myStats) this.checks(stats.player_name);
     }
+
+	static checks(name) {
+        //Checks for the future
+
+	}
 
 }
 
